@@ -1,43 +1,46 @@
 pipeline {
     agent any
+
     tools{
         maven 'local maven'
     }
+
+    parameters{
+        string(name: 'tomcat_dev', defaultValue: '3.16.156.107', description: 'Staging Server')
+        string(name: 'tomcat_prod', defaultValue: '18.224.72.133', description: 'Production Server')
+    }
+
+    triggers {
+         pollSCM('* * * * *')
+     }
+
     stages{
         stage('Build'){
             steps {
                 sh 'mvn clean package'
             }
-            post{
-                success{
-                    echo 'begin archiving'
+            post {
+                success {
+                    echo '开始存档...'
                     archiveArtifacts artifacts: '**/target/*.war'
                 }
             }
-        }  
-        stage('deploy to staging'){
-            steps{
-                build job:'deploy-to-stage'
-            }
         }
-        stage ('Deploy to Production'){
-            steps{
-                timeout(time:5, unit:'DAYS'){
-                    input message:'deploy to production?'
+
+        stage ('Deployments'){
+            parallel{
+                stage ('Deploy to Staging'){
+                    steps {
+                        sh "scp -i C:/Users/xuyan/OneDrive/Desktop/aws-ec2/tomcat-demo.pem **/target/*.war ec2-user@${params.tomcat_dev}:/var/lib/tomcat9/webapps"
+                    }
                 }
 
-                build job: 'deploy-to-production'
-            }
-            post {
-                success {
-                    echo 'successfully deployed to production.'
-                }
-
-                failure {
-                    echo 'failed to deploy to production.'
+                stage ("Deploy to Production"){
+                    steps {
+                        sh "scp -i C:/Users/xuyan/OneDrive/Desktop/aws-ec2/tomcat-demo.pem **/target/*.war ec2-user@${params.tomcat_prod}:/var/lib/tomcat9/webapps"
+                    }
                 }
             }
         }
-
     }
 }
